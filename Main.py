@@ -20,7 +20,7 @@ API_ID = 33841378
 API_HASH = "b0cd560d2550670d137bb828439d25fd"
 BOT_TOKEN = "8718472144:AAE35OGiq_KlOXZ78DIuzr7oRQNqcUGQXtw"
 MONGO_URI = "mongodb+srv://Indrajit12345:Indrajit12345@cluster0.k4l475p.mongodb.net/?appName=Cluster0"
-ADMIN_ID = 12345678  # Change this to your Telegram User ID (Get it from @MissRose_bot using /id)
+ADMIN_ID =  6783893816 # Change this to your Telegram User ID (Get it from @MissRose_bot using /id)
 
 # --- WEB SERVER (Required for Render Health Check) ---
 web_app = Flask(__name__)
