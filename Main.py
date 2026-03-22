@@ -226,7 +226,7 @@ async def auto_save_handler(client, message):
 async def start_bot():
     Thread(target=run_flask, daemon=True).start()
     await app.start()
-    logger.info("🚀 INDRA ULTRA PRO V7 IS LIVE!")
+    logger.info("🚀 RDX ULTRA PRO V7 IS LIVE!")
     await idle()
 
 if __name__ == "__main__":
