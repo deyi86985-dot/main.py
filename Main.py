@@ -3,7 +3,6 @@ import os
 import asyncio
 import re
 import difflib
-import sys
 from pyrogram import Client, filters, idle
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -21,13 +20,12 @@ API_HASH = "b0cd560d2550670d137bb828439d25fd"
 BOT_TOKEN = "8718472144:AAE35OGiq_KlOXZ78DIuzr7oRQNqcUGQXtw"
 MONGO_URI = "mongodb+srv://Indrajit12345:Indrajit12345@cluster0.k4l475p.mongodb.net/?appName=Cluster0"
 
-# Apnar ID (Owner)
 OWNER_ID = 6783893816
 CHANNEL_ID = -1003065768519 
 
 DELETE_WARNING = "⚠️ ❌👉This file automatically❗delete after 2 minute❗so please forward in another chat👈❌"
 
-NO_RESULTS_TEXT = """🄰🅃🅃🄴🄽🅃🄸🄾🄽 🄷🄴🅁🄴
+SEARCH_RULES = """🄰🅃🅃🄴🄽🅃🄸🄾🄽 🄷🄴🅁🄴
 𝐌𝐎𝐕𝐈𝐄/𝐒𝐄𝐑𝐈𝐄𝐒 𝐒𝐄𝐀𝐑𝐂𝐇 𝐑𝐔𝐋𝐄𝐒 🍿
 
 ◉ ᴀʟᴡᴀʏꜱ ᴜꜱᴇ ᴄᴏʀʀᴇᴄᴛ ꜱᴘᴇʟʟɪɴɢ. ʏᴏᴜ ᴄᴀɴ ꜰɪɴᴅ ʀɪɢʜᴛ ꜱᴘᴇʟʟɪɴɢ ꜰʀᴏᴍ google.com
@@ -39,34 +37,25 @@ NO_RESULTS_TEXT = """🄰🅃🅃🄴🄽🅃🄸🄾🄽 🄷🄴🅁🄴
 ◉ ꜱᴇᴀʀᴄʜ ꜱᴇʀɪᴇꜱ ʟɪᴋᴇ ᴛʜɪꜱ :- 
 › ᴠɪᴋɪɴɢꜱ ✔️ 
 › ᴠɪᴋɪɴɢꜱ ꜱ01 ✔️ 
-› ᴠɪᴋɪɴɢꜱ ꜱ01ᴇ01 ✔️ """
+
+◉ ᴅᴏɴᴛ ʀᴇ𝚀ᴜᴇꜱᴛ ᴀɴʏᴛʜɪɴɢ ᴏᴛʜᴇʀ ᴛʜᴀɴ ᴍᴏᴠɪᴇ , ꜱᴇʀɪᴇ𝒔 , ᴀɴɪᴍᴇ."""
 
 # --- DATABASE ---
 class Database:
     def __init__(self, url):
         self._client = AsyncIOMotorClient(url)
-        self.db = self._client["RDX_ULTRA_V4"]
+        self.db = self._client["INDRA_ULTRA_V5_MASTER"]
         self.files = self.db["files"]
         self.admins = self.db["admins"]
-        self.users = self.db["users"]
 
-    # Admin Management
     async def add_admin(self, user_id):
         await self.admins.update_one({"user_id": user_id}, {"$set": {"user_id": user_id}}, upsert=True)
-
-    async def remove_admin(self, user_id):
-        await self.admins.delete_one({"user_id": user_id})
 
     async def is_admin(self, user_id):
         if user_id == OWNER_ID: return True
         admin = await self.admins.find_one({"user_id": user_id})
         return True if admin else False
 
-    async def get_admins(self):
-        cursor = self.admins.find({})
-        return [doc['user_id'] for doc in await cursor.to_list(length=100)]
-
-    # File Management
     async def save_file(self, file_id, file_name, file_size, original_caption):
         clean_name = re.sub(r'[_.\-]', ' ', file_name).lower().strip()
         f_name = file_name.lower().strip()
@@ -81,13 +70,20 @@ class Database:
             return True
         return False
 
-    async def delete_file(self, file_id_obj):
-        await self.files.delete_one({"_id": ObjectId(file_id_obj)})
-
 db = Database(MONGO_URI)
 
+# --- WEB SERVER ---
+web_app = Flask(__name__)
+@web_app.route('/')
+def home(): return "INDRA Ultra PM-Index Server is Online! 🚀"
+
+def run_flask():
+    web_app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+
+app = Client("INDRA_FINAL_PRO", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
+
 # --- HELPERS ---
-def extract_info(filename):
+def format_button_label(filename):
     res = re.search(r'(480p|720p|1080p|2160p|4k)', filename, re.I)
     year = re.search(r'(19|20)\d{2}', filename)
     res_str = res.group(0).upper() if res else "HD"
@@ -98,32 +94,8 @@ def extract_info(filename):
 
 async def auto_delete(client, chat_id, message_ids):
     await asyncio.sleep(120)
-    try:
-        await client.delete_messages(chat_id, message_ids)
+    try: await client.delete_messages(chat_id, message_ids)
     except: pass
-
-# --- WEB SERVER ---
-web_app = Flask(__name__)
-@web_app.route('/')
-def home(): return "RDX Ultra Admin Mode Active!"
-
-def run_flask():
-    web_app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-
-app = Client("RDX_ULTRA_V4", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
-
-# --- DECORATORS ---
-def admin_only(func):
-    async def wrapper(client, message):
-        if await db.is_admin(message.from_user.id):
-            return await func(client, message)
-    return wrapper
-
-def owner_only(func):
-    async def wrapper(client, message):
-        if message.from_user.id == OWNER_ID:
-            return await func(client, message)
-    return wrapper
 
 # --- HANDLERS ---
 
@@ -139,70 +111,63 @@ async def start_handler(client, message):
                 caption=doc['caption']
             )
             warn_msg = await message.reply_text(DELETE_WARNING)
-            asyncio.create_task(auto_delete(client, message.chat.id, [sent_file.id, warn_msg.id]))
+            asyncio.create_task(auto_delete(client, message.from_user.id, [sent_file.id, warn_msg.id]))
             return
+    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\n.𝒊 𝑨𝒎 𝑻𝒉𝒆 𝑴𝒐𝒔𝒕 𝑷𝒐𝒘𝒆𝒓𝒇𝒖𝒍 𝑨𝒖𝒕𝒐 𝑭𝒊𝒍𝒕𝒆𝒓 𝑩𝒐𝒕 𝑾𝒊𝒕𝒉 𝑷𝒓𝒆𝒎𝒊𝒖𝒎 𝑭𝒆𝒂𝒕𝒖𝒓𝒆.")
 
-    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\nI am INDRA Pro. Search movies in group.")
-
-# Admin Management Commands (Owner Only)
-@app.on_message(filters.command("add_admin") & filters.user(OWNER_ID))
-async def add_admin_cmd(client, message):
-    if len(message.command) < 2: return
-    user_id = int(message.command[1])
-    await db.add_admin(user_id)
-    await message.reply(f"✅ User `{user_id}` ekhon theke Admin!")
-
-@app.on_message(filters.command("remove_admin") & filters.user(OWNER_ID))
-async def rem_admin_cmd(client, message):
-    if len(message.command) < 2: return
-    user_id = int(message.command[1])
-    await db.remove_admin(user_id)
-    await message.reply(f"❌ User `{user_id}` ke Admin list theke sorano hoyeche.")
-
-@app.on_message(filters.command("admins") & filters.user(OWNER_ID))
-async def list_admins_cmd(client, message):
-    admins = await db.get_admins()
-    text = "👮 **Admin List:**\n\n" + "\n".join([f"• `{uid}`" for uid in admins])
-    await message.reply(text)
-
-# Stats (Admin and Owner)
 @app.on_message(filters.command("stats"))
-@admin_only
 async def stats_handler(client, message):
+    if not await db.is_admin(message.from_user.id): return
     count = await db.files.count_documents({})
     await message.reply_text(f"📊 **Total Indexed Files:** `{count}`")
 
-# Index (Admin and Owner)
 @app.on_message(filters.command("index"))
-@admin_only
 async def index_handler(client, message):
-    if len(message.command) < 2: return
-    target = message.command[1]
-    m = await message.reply("🔄 **Scanning & Indexing...**")
+    if not await db.is_admin(message.from_user.id): return
+    target = CHANNEL_ID if len(message.command) < 2 else message.command[1]
+    m = await message.reply("🔄 **Scanning Channel & Captions...**")
     count = 0
-    async for user_msg in client.get_chat_history(target):
-        file = user_msg.document or user_msg.video
-        if file:
-            if await db.save_file(file.file_id, getattr(file, "file_name", "Untitled"), file.file_size, user_msg.caption):
-                count += 1
-    await m.edit(f"✅ Indexed `{count}` files successfully!")
-
-# File Management: Delete specific file (Admin and Owner)
-@app.on_message(filters.command("delete"))
-@admin_only
-async def delete_file_cmd(client, message):
-    if len(message.command) < 2:
-        return await message.reply("Usage: `/delete <File_ID>`")
-    doc_id = message.command[1]
     try:
-        await db.delete_file(doc_id)
-        await message.reply("🗑️ File-ti database theke delete kora hoyeche!")
+        async for user_msg in client.get_chat_history(target):
+            file = user_msg.document or user_msg.video
+            if file:
+                if await db.save_file(file.file_id, getattr(file, "file_name", "Untitled"), file.file_size, user_msg.caption):
+                    count += 1
+        await m.edit(f"✅ Indexed `{count}` files with original captions!")
     except Exception as e:
-        await message.reply(f"❌ Error: `{e}`")
+        await m.edit(f"❌ Error: `{e}`")
+
+@app.on_message(filters.command("add_admin") & filters.user(OWNER_ID))
+async def add_admin_cmd(client, message):
+    if len(message.command) < 2: return
+    try:
+        uid = int(message.command[1])
+        await db.add_admin(uid)
+        await message.reply(f"✅ User `{uid}` is now Admin!")
+    except: await message.reply("Invalid ID!")
+
+# --- AUTO SAVE & PM AUTO INDEX ---
+@app.on_message((filters.chat(CHANNEL_ID) | filters.forwarded | filters.private) & (filters.document | filters.video))
+async def auto_save_handler(client, message):
+    # Check if the sender is Admin/Owner for PM indexing
+    if message.chat.type == filters.chat_type.PRIVATE:
+        if not await db.is_admin(message.from_user.id):
+            return # User-er PM file index hobe na
+
+    file = message.document or message.video
+    f_name = getattr(file, "file_name", "Untitled")
+    f_caption = message.caption or f_name.upper()
+
+    if await db.save_file(file.file_id, f_name, file.file_size, f_caption):
+        # Jodi PM-e Admin file pathai, tobe reply dibe
+        if message.chat.type == filters.chat_type.PRIVATE:
+            await message.reply_text(f"✅ **File Auto-Indexed!**\n\n📂 **Name:** `{f_name}`\n📦 **Size:** `{round(file.file_size/(1024*1024), 2)} MB`")
+        else:
+            logger.info(f"New file indexed from Channel: {f_name}")
 
 # Search Logic
-@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "delete", "add_admin", "remove_admin", "admins"]))
-async def handle_search(client, message):
+@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "add_admin"]))
+async def search_handler(client, message):
     query = message.text.lower().strip()
     if len(query) < 2: return
     
@@ -215,34 +180,29 @@ async def handle_search(client, message):
         ]
     })
     results = await cursor.to_list(length=10)
-    
     bot_info = await client.get_me()
 
     if results:
         btns = []
         for f in results:
-            label = extract_info(f['file_name'])
-            # Owner-er jonno delete ID show kora (Optionally)
+            label = format_button_label(f['file_name'])
             f_url = f"https://t.me/{bot_info.username}?start=file_{str(f['_id'])}"
             btns.append([InlineKeyboardButton(label, url=f_url)])
-            
-        # Admin hole File ID dekhar subidha (যাতে পরে ডিলিট করা যায়)
-        resp_text = f"🔍 **Results for:** <code>{query}</code>"
+        
+        resp = f"🔍 **Results for:** ` {query} `\n\n*(Check your Inbox for files)*"
         if await db.is_admin(message.from_user.id):
-            resp_text += "\n\n*(Admins can use /delete <ID> to remove file)*"
-            for f in results:
-                resp_text += f"\n• `{str(f['_id'])}`"
-
-        await message.reply_text(resp_text, reply_markup=InlineKeyboardMarkup(btns))
+            for f in results: resp += f"\n• `{str(f['_id'])}`"
+            
+        await message.reply_text(resp, reply_markup=InlineKeyboardMarkup(btns))
     else:
-        await message.reply_text(NO_RESULTS_TEXT)
+        await message.reply_text(SEARCH_RULES)
 
 # Bootstrap
-async def start_rdx():
-    Thread(target=run_flask, daemon=True).start()
+async def start_bot():
+    Thread(target=lambda: Flask(__name__).run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080))), daemon=True).start()
     await app.start()
-    logger.info("🚀 RDX ULTRA V4 IS ONLINE!")
+    logger.info("🚀 RDX MASTER IS ONLINE!")
     await idle()
 
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(start_rdx())
+    asyncio.get_event_loop().run_until_complete(start_bot())
