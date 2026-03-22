@@ -21,7 +21,7 @@ BOT_TOKEN = "8718472144:AAE35OGiq_KlOXZ78DIuzr7oRQNqcUGQXtw"
 MONGO_URI = "mongodb+srv://Indrajit12345:Indrajit12345@cluster0.k4l475p.mongodb.net/?appName=Cluster0"
 
 OWNER_ID = 6783893816 
-CHANNEL_ID = -1003065768519 
+CHANNEL_ID = -1003065768519 # আপনার প্রধান মুভি চ্যানেল
 
 DELETE_WARNING = "⚠️ ❌👉This file automatically❗delete after 2 minute❗so please forward in another chat👈❌"
 
@@ -29,12 +29,11 @@ DELETE_WARNING = "⚠️ ❌👉This file automatically❗delete after 2 minute�
 class Database:
     def __init__(self, url):
         self._client = AsyncIOMotorClient(url)
-        self.db = self._client["RDX_ULTRA_PRO_V7"]
+        # ডাটাবেস নাম ফিক্সড রাখা হলো যাতে ডাটা হারিয়ে না যায়
+        self.db = self._client["RDX_ULTRA_FINAL_MASTER"]
         self.files = self.db["files"]
         self.admins = self.db["admins"]
-        self.banned = self.db["banned"]
 
-    # Admin Logic
     async def add_admin(self, user_id):
         await self.admins.update_one({"user_id": user_id}, {"$set": {"user_id": user_id}}, upsert=True)
 
@@ -42,17 +41,10 @@ class Database:
         if user_id == OWNER_ID: return True
         return await self.admins.find_one({"user_id": user_id}) is not None
 
-    # Ban Logic
-    async def ban_user(self, user_id):
-        await self.banned.update_one({"user_id": user_id}, {"$set": {"user_id": user_id}}, upsert=True)
-
-    async def is_banned(self, user_id):
-        return await self.banned.find_one({"user_id": user_id}) is not None
-
-    # File Logic
     async def save_file(self, file_id, file_name, file_size, caption):
         clean_name = re.sub(r'[_.\-]', ' ', file_name).lower().strip()
         f_name = file_name.lower().strip()
+        # ডুপ্লিকেট চেক
         if not await self.files.find_one({"file_name": f_name, "file_size": file_size}):
             await self.files.insert_one({
                 'file_id': file_id, 
@@ -65,26 +57,20 @@ class Database:
         return False
 
     async def get_all_file_names(self):
-        cursor = self.files.find({}, {"file_name": 1, "clean_name": 1})
-        return await cursor.to_list(length=10000)
+        cursor = self.files.find({}, {"file_name": 1})
+        res = await cursor.to_list(length=20000)
+        return [f['file_name'] for f in res]
 
 db = Database(MONGO_URI)
 
 # --- HELPERS ---
 def format_btn_label(filename):
-    """Formats button label as: Resolution / Movie Name Year"""
-    # Extract resolution
     res_match = re.search(r'(480p|720p|1080p|2160p|4k)', filename, re.I)
     res = res_match.group(0).upper() if res_match else "HD"
-    
-    # Extract year
     year_match = re.search(r'(19|20)\d{2}', filename)
     year = year_match.group(0) if year_match else ""
-    
-    # Clean name (remove resolution and year from middle)
     clean = re.sub(r'(480p|720p|1080p|2160p|4k|19\d{2}|20\d{2})', '', filename, flags=re.I)
     clean = re.sub(r'[_.\-]', ' ', clean).strip().title()
-    
     return f"{res} / {clean} {year}".strip()
 
 async def auto_delete(client, chat_id, message_ids):
@@ -95,19 +81,17 @@ async def auto_delete(client, chat_id, message_ids):
 # --- WEB SERVER ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "RDX Ultra Pro is Online! 🚀"
+def home(): return "RDX Extreme Indexer Active! 🚀"
 
 def run_flask():
     web_app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
-app = Client("RDX_FINAL_ULTRA", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
+app = Client("RDX_EXTREME", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
 
 # --- COMMANDS ---
 
 @app.on_message(filters.command("start"))
 async def start_handler(client, message):
-    if await db.is_banned(message.from_user.id): return
-    
     if len(message.command) > 1 and message.command[1].startswith("file_"):
         doc_id = message.command[1].split("_")[1]
         doc = await db.files.find_one({"_id": ObjectId(doc_id)})
@@ -120,7 +104,7 @@ async def start_handler(client, message):
             warn_msg = await message.reply_text(DELETE_WARNING)
             asyncio.create_task(auto_delete(client, message.from_user.id, [sent_file.id, warn_msg.id]))
             return
-    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\nSearch movies in group. I will find them even if you make small spelling mistakes!")
+    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\nSearch movies in group.")
 
 @app.on_message(filters.command("stats"))
 async def stats_handler(client, message):
@@ -128,11 +112,21 @@ async def stats_handler(client, message):
     count = await db.files.count_documents({})
     await message.reply_text(f"📊 **Total Indexed Files:** `{count}`")
 
+# --- EXTREME INDEXING LOGIC ---
 @app.on_message(filters.command("index"))
 async def index_handler(client, message):
     if not await db.is_admin(message.from_user.id): return
-    target = CHANNEL_ID if len(message.command) < 2 else message.command[1]
-    m = await message.reply("🔄 **Scanning Channel...**")
+    
+    # টার্গেট আইডি বা ইউজারনেম
+    if len(message.command) < 2:
+        target = CHANNEL_ID # বাই ডিফল্ট আপনার ফিক্সড চ্যানেল আইডি
+    else:
+        target = message.command[1]
+        if "t.me/" in target: target = target.split("/")[-1]
+        if not target.startswith("-100") and not target.startswith("@"):
+            target = f"@{target}"
+
+    m = await message.reply(f"🔄 **Extreme Indexing Started for `{target}`...**")
     count = 0
     try:
         async for user_msg in client.get_chat_history(target):
@@ -140,9 +134,9 @@ async def index_handler(client, message):
             if file:
                 if await db.save_file(file.file_id, getattr(file, "file_name", "Untitled"), file.file_size, user_msg.caption):
                     count += 1
-        await m.edit(f"✅ Indexed `{count}` files successfully!")
+        await m.edit(f"✅ **Indexing Successful!**\n\n📂 Total Added: `{count}` files.\n📊 Check /stats to confirm.")
     except Exception as e:
-        await m.edit(f"❌ Error: `{e}`")
+        await m.edit(f"❌ **Indexing Failed!**\n\nError: `{e}`\n\n*Tip: Make sure the bot is an Admin in the channel with full permissions.*")
 
 @app.on_message(filters.command("add_admin") & filters.user(OWNER_ID))
 async def add_admin_cmd(client, message):
@@ -151,32 +145,17 @@ async def add_admin_cmd(client, message):
         uid = int(message.command[1])
         await db.add_admin(uid)
         await message.reply(f"✅ User `{uid}` is now an Admin!")
-    except: await message.reply("Please provide a valid numeric User ID.")
+    except: await message.reply("Invalid User ID!")
 
-@app.on_message(filters.command("ban"))
-async def ban_user_cmd(client, message):
-    if not await db.is_admin(message.from_user.id): return
-    if len(message.command) < 2: return
-    try:
-        uid = int(message.command[1])
-        await db.ban_user(uid)
-        await message.reply(f"🚫 User `{uid}` has been banned.")
-    except: await message.reply("Invalid User ID.")
-
-# --- ADVANCED SEARCH LOGIC ---
-@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "add_admin", "ban"]))
+# --- SEARCH LOGIC (Fuzzy + Regex) ---
+@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "add_admin"]))
 async def handle_search(client, message):
-    if await db.is_banned(message.from_user.id): return
-    
     query = message.text.lower().strip()
     if len(query) < 2: return
     
-    bot_info = await client.get_me()
-    
-    # 1. Regex Match (Multi-keyword)
+    # 1. Regex Multi-keyword
     words = query.split()
     regex_pattern = f"^{''.join([f'(?=.*{re.escape(word)})' for word in words])}.*$"
-    
     cursor = db.files.find({
         "$or": [
             {"file_name": {"$regex": regex_pattern, "$options": "i"}},
@@ -185,33 +164,25 @@ async def handle_search(client, message):
     })
     results = await cursor.to_list(length=10)
     
-    # 2. Fuzzy/Close Match (If regex finds nothing or very little)
+    # 2. Fuzzy Match (বানান ভুল হলেও খুঁজে পাবে)
     if len(results) < 3:
-        all_files = await db.get_all_file_names()
-        names_only = [f['file_name'] for f in all_files]
-        # Get close matches using difflib
-        matches = difflib.get_close_matches(query, names_only, n=5, cutoff=0.4)
+        all_names = await db.get_all_file_names()
+        matches = difflib.get_close_matches(query, all_names, n=5, cutoff=0.4)
         for m in matches:
             doc = await db.files.find_one({"file_name": m})
             if doc and doc not in results:
                 results.append(doc)
 
+    bot_info = await client.get_me()
     if results:
         btns = []
         for f in results:
             label = format_btn_label(f['file_name'])
             f_url = f"https://t.me/{bot_info.username}?start=file_{str(f['_id'])}"
             btns.append([InlineKeyboardButton(label, url=f_url)])
-        
-        await message.reply_text(
-            f"🔍 **Results for:** `{query}`\n\n*(Click to get file in PM)*", 
-            reply_markup=InlineKeyboardMarkup(btns)
-        )
-    else:
-        # Show Search Rules if absolutely nothing found
-        pass # Add your rules text here if needed
+        await message.reply_text(f"🔍 **Results for:** `{query}`", reply_markup=InlineKeyboardMarkup(btns))
 
-# --- AUTO SAVE ---
+# --- PM AUTO INDEX ---
 @app.on_message((filters.chat(CHANNEL_ID) | filters.forwarded | filters.private) & (filters.document | filters.video))
 async def auto_save_handler(client, message):
     if message.chat.type == filters.chat_type.PRIVATE:
@@ -220,13 +191,13 @@ async def auto_save_handler(client, message):
     file = message.document or message.video
     if await db.save_file(file.file_id, getattr(file, "file_name", "Untitled"), file.file_size, message.caption):
         if message.chat.type == filters.chat_type.PRIVATE:
-            await message.reply_text(f"✅ **Indexed:** `{getattr(file, 'file_name', 'Untitled')}`")
+            await message.reply_text(f"✅ **File Auto-Indexed!**\n📂 Name: `{getattr(file, 'file_name', 'Untitled')}`")
 
 # Bootstrap
 async def start_bot():
-    Thread(target=run_flask, daemon=True).start()
+    Thread(target=lambda: Flask(__name__).run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080))), daemon=True).start()
     await app.start()
-    logger.info("🚀 RDX ULTRA PRO V7 IS LIVE!")
+    logger.info("🚀 RDX EXTREME IS ONLINE!")
     await idle()
 
 if __name__ == "__main__":
