@@ -14,37 +14,22 @@ from threading import Thread
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION (আপনার আইডিগুলো চেক করে নিন) ---
 API_ID = 33841378
 API_HASH = "b0cd560d2550670d137bb828439d25fd"
 BOT_TOKEN = "8718472144:AAE35OGiq_KlOXZ78DIuzr7oRQNqcUGQXtw"
 MONGO_URI = "mongodb+srv://Indrajit12345:Indrajit12345@cluster0.k4l475p.mongodb.net/?appName=Cluster0"
 
-OWNER_ID = 6783893816
-CHANNEL_ID = -1003065768519 
+OWNER_ID = 6783893816 # নিশ্চিত করুন এটি আপনার সঠিক টেলিগ্রাম আইডি
+CHANNEL_ID = -1003065768519 # আপনার মুভি চ্যানেল আইডি
 
 DELETE_WARNING = "⚠️ ❌👉This file automatically❗delete after 2 minute❗so please forward in another chat👈❌"
 
-SEARCH_RULES = """🄰🅃🅃🄴🄽🅃🄸🄾🄽 🄷🄴🅁🄴
-𝐌𝐎𝐕𝐈𝐄/𝐒𝐄𝐑𝐈𝐄𝐒 𝐒𝐄𝐀𝐑𝐂𝐇 𝐑𝐔𝐋𝐄𝐒 🍿
-
-◉ ᴀʟᴡᴀʏꜱ ᴜꜱᴇ ᴄᴏʀʀᴇᴄᴛ ꜱᴘᴇʟʟɪɴɢ. ʏᴏᴜ ᴄᴀɴ ꜰɪɴᴅ ʀɪɢʜᴛ ꜱᴘᴇʟʟɪɴɢ ꜰʀᴏᴍ google.com
-
-◉ ꜱᴇᴀʀᴄʜ ᴍᴏᴠɪᴇꜱ ʟɪᴋᴇ ᴛʜɪꜱ :- 
-› ꜱᴀʟᴀᴀʀ 2023 ✔️ 
-› ꜱᴀʟᴀᴀʀ ʜɪɴᴅɪ ✔️ 
-
-◉ ꜱᴇᴀʀᴄʜ ꜱᴇʀɪᴇꜱ ʟɪᴋᴇ ᴛʜɪꜱ :- 
-› ᴠɪᴋɪɴɢꜱ ✔️ 
-› ᴠɪᴋɪɴɢꜱ ꜱ01 ✔️ 
-
-◉ ᴅᴏɴᴛ ʀᴇ𝚀ᴜᴇꜱᴛ ᴀɴʏᴛʜɪɴɢ ᴏᴛʜᴇʀ ᴛʜᴀɴ ᴍᴏᴠɪᴇ , ꜱᴇʀɪᴇ𝒔 , ᴀɴɪᴍᴇ."""
-
-# --- DATABASE ---
+# --- DATABASE HANDLER ---
 class Database:
     def __init__(self, url):
         self._client = AsyncIOMotorClient(url)
-        self.db = self._client["INDRA_ULTRA_V5_MASTER"]
+        self.db = self._client["RDX_ULTRA_V6_FINAL"] # নতুন ডাটাবেস নাম যাতে আগের জটলা না থাকে
         self.files = self.db["files"]
         self.admins = self.db["admins"]
 
@@ -59,6 +44,7 @@ class Database:
     async def save_file(self, file_id, file_name, file_size, original_caption):
         clean_name = re.sub(r'[_.\-]', ' ', file_name).lower().strip()
         f_name = file_name.lower().strip()
+        # ডুপ্লিকেট চেক (একই ফাইল দুবার সেভ হবে না)
         if not await self.files.find_one({"file_name": f_name, "file_size": file_size}):
             await self.files.insert_one({
                 'file_id': file_id, 
@@ -75,12 +61,12 @@ db = Database(MONGO_URI)
 # --- WEB SERVER ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "INDRA Ultra PM-Index Server is Online! 🚀"
+def home(): return "RDX Pro Index Fix is Online! 🚀"
 
 def run_flask():
     web_app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
-app = Client("INDRA_FINAL_PRO", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
+app = Client("RDX_FINAL_PRO", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
 
 # --- HELPERS ---
 def format_button_label(filename):
@@ -113,7 +99,7 @@ async def start_handler(client, message):
             warn_msg = await message.reply_text(DELETE_WARNING)
             asyncio.create_task(auto_delete(client, message.from_user.id, [sent_file.id, warn_msg.id]))
             return
-    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\n.𝒊 𝑨𝒎 𝑻𝒉𝒆 𝑴𝒐𝒔𝒕 𝑷𝒐𝒘𝒆𝒓𝒇𝒖𝒍 𝑨𝒖𝒕𝒐 𝑭𝒊𝒍𝒕𝒆𝒓 𝑩𝒐𝒕 𝑾𝒊𝒕𝒉 𝑷𝒓𝒆𝒎𝒊𝒖𝒎 𝑭𝒆𝒂𝒕𝒖𝒓𝒆.")
+    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\nI AM A POWERFUL AUTO FILTER BOT.")
 
 @app.on_message(filters.command("stats"))
 async def stats_handler(client, message):
@@ -121,11 +107,37 @@ async def stats_handler(client, message):
     count = await db.files.count_documents({})
     await message.reply_text(f"📊 **Total Indexed Files:** `{count}`")
 
+# --- AUTO SAVE & PM INDEX FIX ---
+@app.on_message((filters.chat(CHANNEL_ID) | filters.forwarded | filters.private) & (filters.document | filters.video))
+async def auto_save_handler(client, message):
+    # সরাসরী Owner আইডি চেক করা হচ্ছে যাতে ভুল না হয়
+    is_admin = await db.is_admin(message.from_user.id)
+    
+    if message.chat.type == filters.chat_type.PRIVATE:
+        if not is_admin:
+            return # সাধারণ মেম্বার ফাইল পাঠালে সেভ হবে না
+
+    file = message.document or message.video
+    f_name = getattr(file, "file_name", "Untitled")
+    # অরিজিনাল ক্যাপশন নেওয়া হচ্ছে
+    f_caption = message.caption or f_name.upper()
+
+    if await db.save_file(file.file_id, f_name, file.file_size, f_caption):
+        # সাকসেস মেসেজ (শুধুমাত্র PM-এ ফাইল পাঠালে আসবে)
+        if message.chat.type == filters.chat_type.PRIVATE:
+            await message.reply_text(f"✅ **File Successfully Indexed!**\n\n📂 **Name:** `{f_name}`\n📦 **Size:** `{round(file.file_size/(1024*1024), 2)} MB`")
+        else:
+            logger.info(f"Auto-indexed from Channel: {f_name}")
+    else:
+        if message.chat.type == filters.chat_type.PRIVATE:
+            await message.reply_text("⚠️ **This file is already in the database!**")
+
+# --- MANUAL INDEX COMMAND ---
 @app.on_message(filters.command("index"))
-async def index_handler(client, message):
+async def manual_index(client, message):
     if not await db.is_admin(message.from_user.id): return
     target = CHANNEL_ID if len(message.command) < 2 else message.command[1]
-    m = await message.reply("🔄 **Scanning Channel & Captions...**")
+    m = await message.reply("🔄 **Scanning Channel...**")
     count = 0
     try:
         async for user_msg in client.get_chat_history(target):
@@ -133,40 +145,12 @@ async def index_handler(client, message):
             if file:
                 if await db.save_file(file.file_id, getattr(file, "file_name", "Untitled"), file.file_size, user_msg.caption):
                     count += 1
-        await m.edit(f"✅ Indexed `{count}` files with original captions!")
+        await m.edit(f"✅ Indexed `{count}` files successfully!")
     except Exception as e:
         await m.edit(f"❌ Error: `{e}`")
 
-@app.on_message(filters.command("add_admin") & filters.user(OWNER_ID))
-async def add_admin_cmd(client, message):
-    if len(message.command) < 2: return
-    try:
-        uid = int(message.command[1])
-        await db.add_admin(uid)
-        await message.reply(f"✅ User `{uid}` is now Admin!")
-    except: await message.reply("Invalid ID!")
-
-# --- AUTO SAVE & PM AUTO INDEX ---
-@app.on_message((filters.chat(CHANNEL_ID) | filters.forwarded | filters.private) & (filters.document | filters.video))
-async def auto_save_handler(client, message):
-    # Check if the sender is Admin/Owner for PM indexing
-    if message.chat.type == filters.chat_type.PRIVATE:
-        if not await db.is_admin(message.from_user.id):
-            return # User-er PM file index hobe na
-
-    file = message.document or message.video
-    f_name = getattr(file, "file_name", "Untitled")
-    f_caption = message.caption or f_name.upper()
-
-    if await db.save_file(file.file_id, f_name, file.file_size, f_caption):
-        # Jodi PM-e Admin file pathai, tobe reply dibe
-        if message.chat.type == filters.chat_type.PRIVATE:
-            await message.reply_text(f"✅ **File Auto-Indexed!**\n\n📂 **Name:** `{f_name}`\n📦 **Size:** `{round(file.file_size/(1024*1024), 2)} MB`")
-        else:
-            logger.info(f"New file indexed from Channel: {f_name}")
-
 # Search Logic
-@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "add_admin"]))
+@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "add_admin", "id"]))
 async def search_handler(client, message):
     query = message.text.lower().strip()
     if len(query) < 2: return
@@ -189,17 +173,11 @@ async def search_handler(client, message):
             f_url = f"https://t.me/{bot_info.username}?start=file_{str(f['_id'])}"
             btns.append([InlineKeyboardButton(label, url=f_url)])
         
-        resp = f"🔍 **Results for:** ` {query} `\n\n*(Check your Inbox for files)*"
-        if await db.is_admin(message.from_user.id):
-            for f in results: resp += f"\n• `{str(f['_id'])}`"
-            
-        await message.reply_text(resp, reply_markup=InlineKeyboardMarkup(btns))
-    else:
-        await message.reply_text(SEARCH_RULES)
+        await message.reply_text(f"🔍 **Results for:** `{query}`\n\n*(Check your Inbox for files)*", reply_markup=InlineKeyboardMarkup(btns))
 
 # Bootstrap
 async def start_bot():
-    Thread(target=lambda: Flask(__name__).run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080))), daemon=True).start()
+    Thread(target=run_flask, daemon=True).start()
     await app.start()
     logger.info("🚀 RDX MASTER IS ONLINE!")
     await idle()
