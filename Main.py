@@ -3,12 +3,14 @@ import os
 import asyncio
 import re
 import difflib
+import sys
 from pyrogram import Client, filters, idle
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson.objectid import ObjectId
 from flask import Flask
 from threading import Thread
+from spellchecker import SpellChecker  # নতুন যুক্ত করা হয়েছে
 
 # --- LOGGING ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -21,18 +23,26 @@ BOT_TOKEN = "8718472144:AAE35OGiq_KlOXZ78DIuzr7oRQNqcUGQXtw"
 MONGO_URI = "mongodb+srv://Indrajit12345:Indrajit12345@cluster0.k4l475p.mongodb.net/?appName=Cluster0"
 
 OWNER_ID = 6783893816 
-CHANNEL_ID = -1003776932894
+
+# স্পেল চেকার ইনিশিয়ালাইজেশন
+spell = SpellChecker()
 
 DELETE_WARNING = "⚠️ ❌👉This file automatically❗delete after 2 minute❗so please forward in another chat👈❌"
+
+RULES_MSG = """🄰🅃🅃🄴🄽🅃🄸🄾🄽 🄷🄴🅁🄴
+𝐌𝐎𝐕𝐈𝐄/𝐒𝐄𝐑𝐈𝐄𝐒 𝐒𝐄𝐀𝐑𝐂𝐇 𝐑𝐔𝐋𝐄𝐒 🍿
+
+◉ ᴀʟᴡᴀʏꜱ ᴜꜱᴇ ᴄᴏʀʀᴇᴄᴛ ꜱᴘᴇʟʟɪɴɢ.
+◉ ꜱᴇᴀʀᴄʜ ᴍᴏᴠɪᴇꜱ ʟɪᴋᴇ ᴛʜɪꜱ :- ꜱᴀʟᴀᴀʀ 2023 ✔️
+◉ ꜱᴇᴀʀᴄʜ ꜱᴇʀɪᴇꜱ ʟɪᴋᴇ ᴛʜɪꜱ :- ᴠɪᴋɪɴɢꜱ ꜱ01 ✔️"""
 
 # --- DATABASE HANDLER ---
 class Database:
     def __init__(self, url):
         self._client = AsyncIOMotorClient(url)
-        self.db = self._client["RDX_ULTRA_V9_STABLE"] # একদম নতুন ডাটাবেস
+        self.db = self._client["CINESOCIETY_ULTRA_V1"]
         self.files = self.db["files"]
         self.admins = self.db["admins"]
-        self.banned = self.db["banned"]
 
     async def add_admin(self, user_id):
         await self.admins.update_one({"user_id": user_id}, {"$set": {"user_id": user_id}}, upsert=True)
@@ -62,29 +72,43 @@ class Database:
 
 db = Database(MONGO_URI)
 
+# --- WEB SERVER ---
+web_app = Flask(__name__)
+@web_app.route('/')
+def home(): return "RDX Ultra Pro is Running! 🚀"
+
+def run_flask():
+    web_app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+
+app = Client("RDX_MASTER_PRO", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
+
 # --- HELPERS ---
-def format_label(filename):
+def check_spelling(text):
+    """ভুল বানান ঠিক করার ফাংশন"""
+    words = text.split()
+    corrected_words = []
+    for word in words:
+        # মুভির নামের ক্ষেত্রে অনেক সময় সংখ্যা বা স্পেশাল ক্যারেক্টার থাকে, সেগুলো বাদ দিয়ে চেক করবে
+        if word.isalpha():
+            cor = spell.correction(word)
+            corrected_words.append(cor if cor else word)
+        else:
+            corrected_words.append(word)
+    return " ".join(corrected_words)
+
+def format_btn(filename):
     res_match = re.search(r'(480p|720p|1080p|2160p|4k)', filename, re.I)
     res = res_match.group(0).upper() if res_match else "HD"
     year_match = re.search(r'(19|20)\d{2}', filename)
     year = year_match.group(0) if year_match else ""
     clean = re.sub(r'(480p|720p|1080p|2160p|4k|19\d{2}|20\d{2})', '', filename, flags=re.I)
-    clean = re.sub(r'[@\[\].\-_]', ' ', clean).strip().title()
-    clean = re.sub(r'\s+', ' ', clean)
-    # Format: Resolution / Movie Name Year
+    clean = re.sub(r'[_.\-]', ' ', clean).strip().title()
     return f"{res} / {clean} {year}".strip()
 
 async def auto_delete(client, chat_id, message_ids):
-    await asyncio.sleep(120)
+    await asyncio.sleep(120) 
     try: await client.delete_messages(chat_id, message_ids)
     except: pass
-
-# --- WEB SERVER ---
-web_app = Flask(__name__)
-@web_app.route('/')
-def home(): return "RDX Ultra Final Pro is Live! 🚀"
-
-app = Client("RDX_V9", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
 
 # --- HANDLERS ---
 
@@ -102,7 +126,7 @@ async def start_handler(client, message):
             warn_msg = await message.reply_text(DELETE_WARNING)
             asyncio.create_task(auto_delete(client, message.from_user.id, [sent_file.id, warn_msg.id]))
             return
-    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\nSearch movies in group. If you make spelling mistakes, I will still find them!")
+    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\nI am CINESOCIETY Pro Filter Bot.")
 
 @app.on_message(filters.command("stats"))
 async def stats_handler(client, message):
@@ -110,14 +134,11 @@ async def stats_handler(client, message):
     count = await db.files.count_documents({})
     await message.reply_text(f"📊 **Total Indexed Files:** `{count}`")
 
-# --- SMART INDEX COMMAND ---
 @app.on_message(filters.command("index"))
-async def index_handler(client, message):
+async def index_cmd(client, message):
     if not await db.is_admin(message.from_user.id): return
-    
     target = CHANNEL_ID if len(message.command) < 2 else message.command[1]
-    
-    m = await message.reply(f"🔄 **Scanning `{target}`...**\n*(If this fails, forward a file from the channel to me)*")
+    m = await message.reply("🔄 **Indexing...**")
     count = 0
     try:
         async for user_msg in client.get_chat_history(target):
@@ -125,61 +146,22 @@ async def index_handler(client, message):
             if file:
                 if await db.save_file(file.file_id, getattr(file, "file_name", "Untitled"), file.file_size, user_msg.caption):
                     count += 1
-        await m.edit(f"✅ Indexed `{count}` files successfully!")
+        await m.edit(f"✅ Indexed `{count}` files!")
     except Exception as e:
-        await m.edit(f"❌ **Indexing Failed!**\n\n**Error:** `{e}`\n\n**Trick:** আপনার মুভি চ্যানেল থেকে যেকোনো ১টি মুভি আমার ইনবক্সে Forward করুন। আমি চ্যাট আইডি চিনে নেব।")
+        await m.edit(f"❌ Error: `{e}`")
 
-@app.on_message(filters.command("add_admin") & filters.user(OWNER_ID))
-async def add_admin_cmd(client, message):
-    if len(message.command) < 2: return
-    try:
-        uid = int(message.command[1])
-        await db.add_admin(uid)
-        await message.reply(f"✅ User `{uid}` is now an Admin!")
-    except: await message.reply("Invalid ID!")
-
-# --- AUTO SAVE & FORWARD TRICK ---
-@app.on_message((filters.chat(CHANNEL_ID) | filters.forwarded | filters.private) & (filters.document | filters.video))
-async def auto_save_handler(client, message):
-    # Admin PM-এ ফরওয়ার্ড করলে সেভ হবে
-    if message.chat.type == filters.chat_type.PRIVATE:
-        if not await db.is_admin(message.from_user.id): return
-
-    file = message.document or message.video
-    f_name = getattr(file, "file_name", "Untitled")
-    
-    if await db.save_file(file.file_id, f_name, file.file_size, message.caption):
-        if message.chat.type == filters.chat_type.PRIVATE:
-            # যদি ফরওয়ার্ড করা হয়, তবে একটি বাটন দিবে ফুল চ্যানেল ইনডেক্স করার জন্য
-            btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔍 Index Full Channel", callback_data=f"idx_{message.forward_from_chat.id if message.forward_from_chat else 'none'}")]])
-            await message.reply_text(f"✅ **File Indexed!**\n📂 `{f_name}`", reply_markup=btn if message.forward_from_chat else None)
-
-@app.on_callback_query(filters.regex(r"^idx_"))
-async def cb_index_full(client, query: CallbackQuery):
-    chat_id = query.data.split("_")[1]
-    if chat_id == "none": return await query.answer("Forward properly!", show_alert=True)
-    
-    await query.message.edit_text(f"🔄 **Starting Full Index for `{chat_id}`...**")
-    count = 0
-    try:
-        async for user_msg in client.get_chat_history(int(chat_id)):
-            file = user_msg.document or user_msg.video
-            if file:
-                if await db.save_file(file.file_id, getattr(file, "file_name", "Untitled"), file.file_size, user_msg.caption):
-                    count += 1
-        await query.message.edit_text(f"✅ Indexed `{count}` files from this channel!")
-    except Exception as e:
-        await query.message.edit_text(f"❌ Failed: {e}")
-
-# --- ADVANCED SEARCH (Fuzzy + Format) ---
+# --- SEARCH LOGIC WITH SPELL CHECK ---
 @app.on_message(filters.text & ~filters.command(["start", "stats", "index", "add_admin"]))
-async def handle_search(client, message):
-    query = message.text.lower().strip()
-    if len(query) < 2: return
+async def search_handler(client, message):
+    original_query = message.text.lower().strip()
+    if len(original_query) < 2: return
     
-    # 1. Regex Multi-keyword
+    # বানান চেক করে নতুন কুয়েরি তৈরি করা
+    query = check_spelling(original_query)
+    
     words = query.split()
     regex_pattern = f"^{''.join([f'(?=.*{re.escape(word)})' for word in words])}.*$"
+    
     cursor = db.files.find({
         "$or": [
             {"file_name": {"$regex": regex_pattern, "$options": "i"}},
@@ -188,28 +170,46 @@ async def handle_search(client, message):
     })
     results = await cursor.to_list(length=10)
     
-    # 2. Fuzzy Match (বানান ভুল হলেও)
-    if len(results) < 3:
+    # বানান ঠিক করার পরেও রেজাল্ট না পেলে ডিফলিব ব্যবহার করা
+    if not results:
         all_names = await db.get_all_names()
         matches = difflib.get_close_matches(query, all_names, n=5, cutoff=0.4)
         for m in matches:
             doc = await db.files.find_one({"file_name": m})
-            if doc and doc not in results: results.append(doc)
+            if doc and doc not in results:
+                results.append(doc)
 
-    bot_info = await client.get_me()
+    bot = await client.get_me()
     if results:
         btns = []
         for f in results:
-            label = format_label(f['file_name'])
-            f_url = f"https://t.me/{bot_info.username}?start=file_{str(f['_id'])}"
+            label = format_btn(f['file_name'])
+            f_url = f"https://t.me/{bot.username}?start=file_{str(f['_id'])}"
             btns.append([InlineKeyboardButton(label, url=f_url)])
-        await message.reply_text(f"🔍 **Results for:** `{query}`", reply_markup=InlineKeyboardMarkup(btns))
+        
+        # যদি বানান সংশোধন করা হয়, তবে ইউজারকে জানানো
+        search_text = f"🔍 **Results for:** `{query}`"
+        if query != original_query:
+            search_text = f"🔎 **Showing results for:** `{query}`\n_(Corrected from '{original_query}')_"
+            
+        await message.reply_text(search_text, reply_markup=InlineKeyboardMarkup(btns))
+    else:
+        await message.reply_text(RULES_MSG)
 
-# Bootstrap
+@app.on_message(filters.private & (filters.document | filters.video))
+async def auto_save(client, message):
+    if not await db.is_admin(message.from_user.id): return
+    file = message.document or message.video
+    file_name = getattr(file, "file_name", "Untitled")
+    if await db.save_file(file.file_id, file_name, file.file_size, message.caption):
+        await message.reply_text(f"✅ Indexed: `{file_name}`")
+    else:
+        await message.reply_text(f"⚠️ Already exists!")
+
 async def start_bot():
-    Thread(target=lambda: Flask(__name__).run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080))), daemon=True).start()
+    Thread(target=run_flask, daemon=True).start()
     await app.start()
-    logger.info("🚀 RDX FINAL PRO IS ONLINE!")
+    logger.info("🚀 CINESOCIETY MASTER IS LIVE!")
     await idle()
 
 if __name__ == "__main__":
