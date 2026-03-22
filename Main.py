@@ -24,6 +24,7 @@ BOT_TOKEN = "8718472144:AAE35OGiq_KlOXZ78DIuzr7oRQNqcUGQXtw"
 MONGO_URI = "mongodb+srv://Indrajit12345:Indrajit12345@cluster0.k4l475p.mongodb.net/?appName=Cluster0"
 
 ADMIN_ID = 6783893816
+OWNER_ID = 6783893816
 CHANNEL_ID = -1003065768519 
 app = Client("FilterBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
