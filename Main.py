@@ -133,8 +133,7 @@ async def start_handler(client, message):
             logger.error(f"Error in deep link start: {e}")
             return
 
-    await message.reply_text(f"👋 **​​​​​​​​​​🚩 WellCome My User 🚩 {message.from_user.mention}!**\n​​​​​​​​​​
-    ɪ ᴀᴍ ᴛʜᴇ ᴍᴏsᴛ ᴘᴏᴡᴇʀғᴜʟ ᴀᴜᴛᴏ ғɪʟᴛᴇʀ ʙᴏᴛ ᴡɪᴛʜ ᴘʀᴇᴍɪᴜᴍ ғᴇᴀᴛᴜʀᴇ..")
+    await message.reply_text(f"👋 **Hello {message.from_user.mention}!**\n​​​​​​​​​ɪ ᴀᴍ ᴛʜᴇ ᴍᴏsᴛ ᴘᴏᴡᴇʀғᴜʟ ᴀᴜᴛᴏ ғɪʟᴛᴇʀ ʙᴏᴛ ᴡɪᴛʜ ᴘʀᴇᴍɪᴜᴍ ғᴇᴀᴛᴜʀᴇ.")
 
 @app.on_message(filters.command("stats") & filters.user(ADMIN_ID))
 async def stats_handler(client, message):
