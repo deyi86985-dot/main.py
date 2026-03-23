@@ -2,7 +2,6 @@ pyrogram
 tgcrypto
 motor
 flask
-pyspellchecker
-cinemagoer
 requests
 dnspython
+imdbpy
