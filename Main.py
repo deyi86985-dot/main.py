@@ -20,7 +20,7 @@ ia = Cinemagoer()
 # --- WEB SERVER ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "CINESOCIETY MASTER IS LIVE! 🚀"
+def home(): return "CINESOCIETY MASTER IS ALIVE! 🚀"
 
 def run_flask():
     port = int(os.environ.get('PORT', 8080))
@@ -64,7 +64,6 @@ async def auto_delete(c, chat_id, msg_id):
 
 # --- SEARCH & PAGINATION ---
 async def send_results(m, query, page=0, is_cb=False):
-    # সার্চ ক্যোয়ারীটি আরও নমনীয় করা হয়েছে
     words = query.split()
     regex = f".*{'.*'.join([re.escape(w) for w in words])}.*"
     cursor = db.files.find({"clean_name": {"$regex": regex, "$options": "i"}})
@@ -99,7 +98,7 @@ async def send_results(m, query, page=0, is_cb=False):
         sent = await m.reply_text(text, reply_markup=InlineKeyboardMarkup(btns))
         if m.chat.type in ["group", "supergroup"]: asyncio.create_task(auto_delete(app, m.chat.id, sent.id))
 
-# --- HANDLERS ---
+# --- COMMAND HANDLERS ---
 @app.on_message(filters.command("start"))
 async def start_cmd(c, m):
     if len(m.command) > 1 and m.command[1].startswith("file_"):
@@ -109,15 +108,16 @@ async def start_cmd(c, m):
             w_msg = await m.reply("⚠️ Deleted in 2 mins!")
             asyncio.create_task(auto_delete(c, m.chat.id, [f_msg.id, w_msg.id]))
         return
-    await m.reply_text(f"👋 Hello {m.from_user.mention}! মুভির নাম লিখে সার্চ করুন।")
+    await m.reply_text(f"👋 Hello {m.from_user.mention}! মুভির নাম লিখে সার্চ করুন।\n\n**Edit by INDRA**")
 
 @app.on_message(filters.command("stats"))
 async def stats_cmd(c, m):
     count = await db.files.count_documents({})
     await m.reply(f"📊 **Total Indexed Files:** `{count}`\n\n**Edit by INDRA**")
 
-@app.on_message(filters.command("index") & filters.user(OWNER_ID))
+@app.on_message(filters.command("index"))
 async def index_cmd(c, m):
+    if m.from_user.id != OWNER_ID: return
     target = CHANNEL_ID if len(m.command) < 2 else m.command[1]
     msg = await m.reply("🔄 **Indexing...**")
     count, checked = 0, 0
@@ -129,10 +129,14 @@ async def index_cmd(c, m):
         if checked % 100 == 0: await msg.edit(f"🔄 Checked: `{checked}` | Saved: `{count}`")
     await msg.edit(f"✅ Indexed `{count}` files!")
 
-@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "commands"]))
+# --- SEARCH HANDLER (CRITICAL FIX) ---
+@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "commands", "pm_on", "pm_off"]))
 async def handle_search(c, m):
+    # কমান্ডগুলো যাতে সার্চ হিসেবে না যায় সেজন্য filters.command এর উল্টো ব্যবহার করা হয়েছে।
+    if m.text.startswith("/"): return 
     await send_results(m, m.text.lower().strip())
 
+# --- CALLBACK HANDLERS ---
 @app.on_callback_query()
 async def cb_handler(c, cb: CallbackQuery):
     data = cb.data.split("_")
