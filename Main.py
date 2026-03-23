@@ -126,7 +126,7 @@ async def start_cmd(c, m):
             w_msg = await m.reply("⚠️ **Deleted in 2 mins!**")
             asyncio.create_task(auto_delete(c, m.chat.id, [f_msg.id, w_msg.id]))
         return
-    await m.reply_text(f"👋 **Hello {m.from_user.mention}!**\nSearch movies here.\n\n**Edit by INDRA**")
+    await m.reply_text(f"👋 **🚩 WellCome & RADHE RADHE 🚩​​​​​​​​​​ {m.from_user.mention}!**\ɪ ᴀᴍ ᴛʜᴇ ᴍᴏsᴛ ᴘᴏᴡᴇʀғᴜʟ ᴀᴜᴛᴏ ғɪʟᴛᴇʀ ʙᴏᴛ ᴡɪᴛʜ ᴘʀᴇᴍɪᴜᴍ ғᴇᴀᴛᴜʀᴇ.\n\n**CREATE BY INDRAJIT**")
 
 @app.on_message(filters.command("stats"))
 async def stats_cmd(c, m):
@@ -165,7 +165,7 @@ async def cb_handler(c, cb: CallbackQuery):
     elif data[0] == "flt":
         q, p = data[2], data[3]
         if data[1] == "lang":
-            btns = [[InlineKeyboardButton(l, callback_data=f"apl_lang_{l}_{q}")] for l in ["Hindi", "English", "Bengali", "Tamil"]]
+            btns = [[InlineKeyboardButton(l, callback_data=f"apl_lang_{l}_{q}")] for l in ["Hindi", "English", "Bengali", "Tamil", "Korian"]]
             btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_{p}")])
             await cb.message.edit(f"🌍 **Select Language:**", reply_markup=InlineKeyboardMarkup(btns))
         else:
