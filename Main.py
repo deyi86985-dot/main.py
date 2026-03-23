@@ -7,10 +7,6 @@ from flask import Flask
 from threading import Thread
 from imdb import Cinemagoer
 
-# --- LOGGING ---
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 # --- CONFIG ---
 API_ID = 33841378
 API_HASH = "b0cd560d2550670d137bb828439d25fd"
@@ -21,10 +17,10 @@ CHANNEL_ID = -1003065768519
 
 ia = Cinemagoer()
 
-# --- WEB SERVER (Render Port Fix) ---
+# --- WEB SERVER (Render Fix) ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "CINESOCIETY ULTRA V5 IS ONLINE! 🚀"
+def home(): return "CINESOCIETY MASTER ONLINE! 🚀"
 
 def run_flask():
     port = int(os.environ.get('PORT', 8080))
@@ -34,10 +30,20 @@ def run_flask():
 class Database:
     def __init__(self, url):
         self.client = AsyncIOMotorClient(url)
-        self.db = self.client["CINESOCIETY_ULTRA_V5"]
+        self.db = self.client["CINESOCIETY_FINAL_DB"]
         self.files = self.db["files"]
         self.users = self.db["users"]
         self.settings = self.db["settings"]
+
+    async def get_user(self, user_id):
+        user = await self.users.find_one({"user_id": user_id})
+        if not user:
+            user = {"user_id": user_id, "is_ban": False, "is_premium": False, "last_verify": 0}
+            await self.users.insert_one(user)
+        return user
+
+    async def update_user(self, user_id, data):
+        await self.users.update_one({"user_id": user_id}, {"$set": data})
 
     async def save_file(self, f_id, f_name, f_size, caption):
         clean = re.sub(r'(@\w+|\[.*?\])', '', f_name).lower().strip()
@@ -54,18 +60,18 @@ def format_btn(filename):
     clean = re.sub(r'(@\w+|\[.*?\])', '', filename)
     res = re.search(r'(480p|720p|1080p|4k)', filename, re.I)
     res = res.group(0).upper() if res else "HD"
-    se = re.search(r'(S\d+|E\d+)', filename, re.I)
-    se = se.group(0).upper() if se else ""
-    clean = re.sub(r'(480p|720p|1080p|4k|S\d+|E\d+)', '', clean, flags=re.I)
+    se = re.search(r'(S\d+|E\d+|Season\s*\d+)', filename, re.I)
+    se_info = se.group(0).upper() if se else ""
+    clean = re.sub(r'(480p|720p|1080p|4k|S\d+|E\d+|Season\s*\d+)', '', clean, flags=re.I)
     clean = re.sub(r'[_.\-]', ' ', clean).strip().title()
-    return f"🎬 {res} / {se} {clean[:25]}".strip()
+    return f"🎬 {res} / {se_info} {clean[:25]}".strip()
 
-async def auto_delete(c, chat_id, msg_id):
+async def auto_delete(c, chat_id, msg_ids):
     await asyncio.sleep(120)
-    try: await c.delete_messages(chat_id, msg_id)
+    try: await c.delete_messages(chat_id, msg_ids)
     except: pass
 
-# --- SEARCH ENGINE ---
+# --- SEARCH & PAGINATION ENGINE ---
 async def send_results(m, query, page=0, is_cb=False):
     words = query.split()
     regex = f".*{'.*'.join([re.escape(w) for w in words])}.*"
@@ -73,18 +79,17 @@ async def send_results(m, query, page=0, is_cb=False):
     results = await cursor.to_list(length=100)
 
     if not results:
-        txt = "❌ No results found!\n\n**Edit by INDRA**"
-        if is_cb: return await m.answer("No more results!", show_alert=True)
-        msg = await m.reply_text(txt)
-        return
+        txt = "❌ **No results found! Check spelling.**\n\n**Edit by INDRA**"
+        if is_cb: return await m.answer("No more files!", show_alert=True)
+        return await m.reply_text(txt)
 
     start, end = page * 10, (page + 1) * 10
     page_items = results[start:end]
     total_pages = (len(results) + 9) // 10
 
     btns = [[
-        InlineKeyboardButton("🌐 Language", callback_data=f"filt_lang_{query}_{page}"),
-        InlineKeyboardButton("📂 Session", callback_data=f"filt_sess_{query}_{page}")
+        InlineKeyboardButton("🌐 Language", callback_data=f"flt_lang_{query}_{page}"),
+        InlineKeyboardButton("📂 Session", callback_data=f"flt_sess_{query}_{page}")
     ]]
     for f in page_items:
         btns.append([InlineKeyboardButton(format_btn(f['file_name']), url=f"https://t.me/{(await app.get_me()).username}?start=file_{f['_id']}")])
@@ -98,27 +103,31 @@ async def send_results(m, query, page=0, is_cb=False):
     if is_cb: await m.message.edit(text, reply_markup=InlineKeyboardMarkup(btns))
     else:
         sent = await m.reply_text(text, reply_markup=InlineKeyboardMarkup(btns))
-        if m.chat.type in ["group", "supergroup"]: asyncio.create_task(auto_delete(app, m.chat.id, sent.id))
+        if m.chat.type in ["group", "supergroup"]: asyncio.create_task(auto_delete(app, m.chat.id, [sent.id]))
 
-# --- COMMANDS ---
+# --- HANDLERS ---
 @app.on_message(filters.command("start"))
 async def start_cmd(c, m):
+    user = await db.get_user(m.from_user.id)
+    if user["is_ban"]: return
+    
     if len(m.command) > 1 and m.command[1].startswith("file_"):
         doc = await db.files.find_one({"_id": ObjectId(m.command[1].split("_")[1])})
         if doc:
             f_msg = await c.send_cached_media(m.chat.id, doc['file_id'], caption=doc['caption'])
-            asyncio.create_task(auto_delete(c, m.chat.id, f_msg.id))
+            w_msg = await m.reply("⚠️ **Deleted in 2 mins! Forward it.**")
+            asyncio.create_task(auto_delete(c, m.chat.id, [f_msg.id, w_msg.id]))
         return
-    await m.reply_text(f"👋 Hello {m.from_user.mention}! Search movies here.")
+    await m.reply_text(f"👋 **Hello {m.from_user.mention}!**\nSearch movies here.\n\n**Edit by INDRA**")
 
 @app.on_message(filters.command("stats"))
 async def stats_cmd(c, m):
     count = await db.files.count_documents({})
-    await m.reply(f"📊 **Total Indexed Files:** `{count}`")
+    await m.reply(f"📊 **Total Indexed Files:** `{count}`\n\n**Edit by INDRA**")
 
 @app.on_message(filters.command("index") & filters.user(OWNER_ID))
 async def index_cmd(c, m):
-    msg = await m.reply("🔄 **Indexing...**")
+    msg = await m.reply("🔄 **Indexing Started...**")
     count, checked = 0, 0
     async for user_msg in c.get_chat_history(CHANNEL_ID):
         checked += 1
@@ -126,19 +135,51 @@ async def index_cmd(c, m):
         if file:
             if await db.save_file(file.file_id, file.file_name, file.file_size, user_msg.caption): count += 1
         if checked % 100 == 0: await msg.edit(f"🔄 Checked: `{checked}` | Saved: `{count}`")
-    await msg.edit(f"✅ Indexed `{count}` files!")
+    await msg.edit(f"✅ **Indexing Completed!**\nTotal Saved: `{count}`")
 
-@app.on_message(filters.text & ~filters.command(["start", "stats", "index"]))
+@app.on_message(filters.private & (filters.document | filters.video))
+async def auto_index_pm(c, m):
+    if m.from_user.id != OWNER_ID: return
+    file = m.document or m.video
+    if await db.save_file(file.file_id, file.file_name, file.file_size, m.caption):
+        await m.reply_text(f"✅ **Indexed:** `{file.file_name}`")
+
+@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "commands", "plan"]))
 async def handle_search(c, m):
     if m.text.startswith("/"): return 
     await send_results(m, m.text.lower().strip())
 
+@app.on_callback_query()
+async def cb_handler(c, cb: CallbackQuery):
+    data = cb.data.split("_")
+    if data[0] == "pg": await send_results(cb, data[1], int(data[2]), is_cb=True)
+    elif data[0] == "flt":
+        q, p = data[2], data[3]
+        if data[1] == "lang":
+            langs = ["Hindi", "English", "Bengali", "Tamil"]
+            btns = [[InlineKeyboardButton(l, callback_data=f"apl_lang_{l}_{q}")] for l in langs]
+            btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_{p}")])
+            await cb.message.edit("🌍 **Select Language:**", reply_markup=InlineKeyboardMarkup(btns))
+        else:
+            btns = [[InlineKeyboardButton(f"S{i}", callback_data=f"apl_sess_{i}_{q}"), InlineKeyboardButton(f"S{i+1}", callback_data=f"apl_sess_{i+1}_{q}")] for i in range(1, 11, 2)]
+            btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_{p}")])
+            await cb.message.edit("📂 **Select Session:**", reply_markup=InlineKeyboardMarkup(btns))
+    elif data[0] == "apl":
+        f_t, val, q = data[1], data[2], data[3]
+        pat = f"S{int(val):02d}|Season {val}" if f_t == "sess" else val
+        cursor = db.files.find({"clean_name": {"$regex": q}, "file_name": {"$regex": pat, "$options": "i"}})
+        res = await cursor.to_list(length=15)
+        if not res: return await cb.message.edit("❌ **This is the language file here.**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")]]))
+        btns = [[InlineKeyboardButton(format_btn(f['file_name']), url=f"https://t.me/{(await c.get_me()).username}?start=file_{f['_id']}")] for f in res]
+        btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")])
+        await cb.message.edit(f"✅ **Results for {val}:**", reply_markup=InlineKeyboardMarkup(btns))
+
 # --- BOOTSTRAP ---
-async def main():
+async def start_bot():
     Thread(target=run_flask, daemon=True).start()
     await app.start()
-    logger.info("🚀 Bot is LIVE!")
+    print("🚀 MASTER BOT IS LIVE! EDIT BY INDRA")
     await idle()
 
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(main())
+    asyncio.get_event_loop().run_until_complete(start_bot())
