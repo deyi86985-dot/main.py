@@ -17,10 +17,10 @@ CHANNEL_ID = -1003065768519
 
 ia = Cinemagoer()
 
-# --- WEB SERVER (Render Fix) ---
+# --- WEB SERVER (Render Port Fix) ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "CINESOCIETY MASTER ONLINE! 🚀"
+def home(): return "CINESOCIETY MASTER IS ONLINE! 🚀"
 
 def run_flask():
     port = int(os.environ.get('PORT', 8080))
@@ -30,7 +30,7 @@ def run_flask():
 class Database:
     def __init__(self, url):
         self.client = AsyncIOMotorClient(url)
-        self.db = self.client["CINESOCIETY_FINAL_DB"]
+        self.db = self.client["CINESOCIETY_FINAL_V6"]
         self.files = self.db["files"]
         self.users = self.db["users"]
         self.settings = self.db["settings"]
@@ -42,13 +42,13 @@ class Database:
             await self.users.insert_one(user)
         return user
 
-    async def update_user(self, user_id, data):
-        await self.users.update_one({"user_id": user_id}, {"$set": data})
-
     async def save_file(self, f_id, f_name, f_size, caption):
         clean = re.sub(r'(@\w+|\[.*?\])', '', f_name).lower().strip()
         if not await self.files.find_one({"file_name": f_name, "file_size": f_size}):
-            await self.files.insert_one({'file_id': f_id, 'file_name': f_name, 'clean_name': clean, 'file_size': f_size, 'caption': caption})
+            await self.files.insert_one({
+                'file_id': f_id, 'file_name': f_name, 
+                'clean_name': clean, 'file_size': f_size, 'caption': caption
+            })
             return True
         return False
 
@@ -71,11 +71,17 @@ async def auto_delete(c, chat_id, msg_ids):
     try: await c.delete_messages(chat_id, msg_ids)
     except: pass
 
-# --- SEARCH & PAGINATION ENGINE ---
+# --- SEARCH ENGINE (Page & All Qualities) ---
 async def send_results(m, query, page=0, is_cb=False):
     words = query.split()
     regex = f".*{'.*'.join([re.escape(w) for w in words])}.*"
-    cursor = db.files.find({"clean_name": {"$regex": regex, "$options": "i"}})
+    
+    cursor = db.files.find({
+        "$or": [
+            {"clean_name": {"$regex": regex, "$options": "i"}},
+            {"file_name": {"$regex": regex, "$options": "i"}}
+        ]
+    })
     results = await cursor.to_list(length=100)
 
     if not results:
@@ -87,30 +93,34 @@ async def send_results(m, query, page=0, is_cb=False):
     page_items = results[start:end]
     total_pages = (len(results) + 9) // 10
 
+    # Top Filter Buttons
     btns = [[
         InlineKeyboardButton("🌐 Language", callback_data=f"flt_lang_{query}_{page}"),
         InlineKeyboardButton("📂 Session", callback_data=f"flt_sess_{query}_{page}")
     ]]
+
     for f in page_items:
         btns.append([InlineKeyboardButton(format_btn(f['file_name']), url=f"https://t.me/{(await app.get_me()).username}?start=file_{f['_id']}")])
 
+    # Pagination Row ( < > )
     nav = []
     if page > 0: nav.append(InlineKeyboardButton("<", callback_data=f"pg_{query}_{page-1}"))
     if end < len(results): nav.append(InlineKeyboardButton(">", callback_data=f"pg_{query}_{page+1}"))
     if nav: btns.append(nav)
 
     text = f"🔍 **Results for:** `{query.upper()}`\n📄 **Page:** `{page+1}/{total_pages}`\n\n**Edit by INDRA**"
-    if is_cb: await m.message.edit(text, reply_markup=InlineKeyboardMarkup(btns))
+    
+    if is_cb:
+        await m.message.edit(text, reply_markup=InlineKeyboardMarkup(btns))
     else:
         sent = await m.reply_text(text, reply_markup=InlineKeyboardMarkup(btns))
-        if m.chat.type in ["group", "supergroup"]: asyncio.create_task(auto_delete(app, m.chat.id, [sent.id]))
+        if m.chat.type in ["group", "supergroup"]:
+            asyncio.create_task(auto_delete(app, m.chat.id, [sent.id]))
 
-# --- HANDLERS ---
+# --- COMMANDS ---
 @app.on_message(filters.command("start"))
 async def start_cmd(c, m):
     user = await db.get_user(m.from_user.id)
-    if user["is_ban"]: return
-    
     if len(m.command) > 1 and m.command[1].startswith("file_"):
         doc = await db.files.find_one({"_id": ObjectId(m.command[1].split("_")[1])})
         if doc:
@@ -144,11 +154,12 @@ async def auto_index_pm(c, m):
     if await db.save_file(file.file_id, file.file_name, file.file_size, m.caption):
         await m.reply_text(f"✅ **Indexed:** `{file.file_name}`")
 
-@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "commands", "plan"]))
+@app.on_message(filters.text & ~filters.command(["start", "stats", "index"]))
 async def handle_search(c, m):
     if m.text.startswith("/"): return 
     await send_results(m, m.text.lower().strip())
 
+# --- CALLBACK FILTERS ---
 @app.on_callback_query()
 async def cb_handler(c, cb: CallbackQuery):
     data = cb.data.split("_")
@@ -159,11 +170,12 @@ async def cb_handler(c, cb: CallbackQuery):
             langs = ["Hindi", "English", "Bengali", "Tamil"]
             btns = [[InlineKeyboardButton(l, callback_data=f"apl_lang_{l}_{q}")] for l in langs]
             btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_{p}")])
-            await cb.message.edit("🌍 **Select Language:**", reply_markup=InlineKeyboardMarkup(btns))
+            await cb.message.edit(f"🌍 **Select Language for {q.title()}:**", reply_markup=InlineKeyboardMarkup(btns))
         else:
-            btns = [[InlineKeyboardButton(f"S{i}", callback_data=f"apl_sess_{i}_{q}"), InlineKeyboardButton(f"S{i+1}", callback_data=f"apl_sess_{i+1}_{q}")] for i in range(1, 11, 2)]
+            btns = [[InlineKeyboardButton(f"S{i}", callback_data=f"apl_sess_{i}_{q}"), 
+                     InlineKeyboardButton(f"S{i+1}", callback_data=f"apl_sess_{i+1}_{q}")] for i in range(1, 11, 2)]
             btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_{p}")])
-            await cb.message.edit("📂 **Select Session:**", reply_markup=InlineKeyboardMarkup(btns))
+            await cb.message.edit(f"📂 **Select Session for {q.title()}:**", reply_markup=InlineKeyboardMarkup(btns))
     elif data[0] == "apl":
         f_t, val, q = data[1], data[2], data[3]
         pat = f"S{int(val):02d}|Season {val}" if f_t == "sess" else val
@@ -171,14 +183,14 @@ async def cb_handler(c, cb: CallbackQuery):
         res = await cursor.to_list(length=15)
         if not res: return await cb.message.edit("❌ **This is the language file here.**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")]]))
         btns = [[InlineKeyboardButton(format_btn(f['file_name']), url=f"https://t.me/{(await c.get_me()).username}?start=file_{f['_id']}")] for f in res]
-        btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")])
+        btns.append([InlineKeyboardButton("🔙 Back to Results", callback_data=f"pg_{q}_0")])
         await cb.message.edit(f"✅ **Results for {val}:**", reply_markup=InlineKeyboardMarkup(btns))
 
 # --- BOOTSTRAP ---
 async def start_bot():
     Thread(target=run_flask, daemon=True).start()
     await app.start()
-    print("🚀 MASTER BOT IS LIVE! EDIT BY INDRA")
+    print("🚀 Master Bot is LIVE! Edit by INDRA")
     await idle()
 
 if __name__ == "__main__":
