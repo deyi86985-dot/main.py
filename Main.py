@@ -7,6 +7,10 @@ from flask import Flask
 from threading import Thread
 from imdb import Cinemagoer
 
+# --- LOGGING ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # --- CONFIG ---
 API_ID = 33841378
 API_HASH = "b0cd560d2550670d137bb828439d25fd"
@@ -20,7 +24,7 @@ ia = Cinemagoer()
 # --- WEB SERVER (Render Port Fix) ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "CINESOCIETY MASTER IS LIVE! 🚀"
+def home(): return "CINESOCIETY ULTRA V5 IS ONLINE! 🚀"
 
 def run_flask():
     port = int(os.environ.get('PORT', 8080))
@@ -32,7 +36,8 @@ class Database:
         self.client = AsyncIOMotorClient(url)
         self.db = self.client["CINESOCIETY_ULTRA_V5"]
         self.files = self.db["files"]
-        self.admins = self.db["admins"]
+        self.users = self.db["users"]
+        self.settings = self.db["settings"]
 
     async def save_file(self, f_id, f_name, f_size, caption):
         clean = re.sub(r'(@\w+|\[.*?\])', '', f_name).lower().strip()
@@ -95,7 +100,7 @@ async def send_results(m, query, page=0, is_cb=False):
         sent = await m.reply_text(text, reply_markup=InlineKeyboardMarkup(btns))
         if m.chat.type in ["group", "supergroup"]: asyncio.create_task(auto_delete(app, m.chat.id, sent.id))
 
-# --- COMMAND HANDLERS ---
+# --- COMMANDS ---
 @app.on_message(filters.command("start"))
 async def start_cmd(c, m):
     if len(m.command) > 1 and m.command[1].startswith("file_"):
@@ -104,12 +109,12 @@ async def start_cmd(c, m):
             f_msg = await c.send_cached_media(m.chat.id, doc['file_id'], caption=doc['caption'])
             asyncio.create_task(auto_delete(c, m.chat.id, f_msg.id))
         return
-    await m.reply_text(f"👋 Hello {m.from_user.mention}! Search movies here.\n\n**Edit by INDRA**")
+    await m.reply_text(f"👋 Hello {m.from_user.mention}! Search movies here.")
 
 @app.on_message(filters.command("stats"))
 async def stats_cmd(c, m):
     count = await db.files.count_documents({})
-    await m.reply(f"📊 **Total Indexed Files:** `{count}`\n\n**Edit by INDRA**")
+    await m.reply(f"📊 **Total Indexed Files:** `{count}`")
 
 @app.on_message(filters.command("index") & filters.user(OWNER_ID))
 async def index_cmd(c, m):
@@ -123,41 +128,16 @@ async def index_cmd(c, m):
         if checked % 100 == 0: await msg.edit(f"🔄 Checked: `{checked}` | Saved: `{count}`")
     await msg.edit(f"✅ Indexed `{count}` files!")
 
-# --- SEARCH HANDLER ---
-@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "commands"]))
+@app.on_message(filters.text & ~filters.command(["start", "stats", "index"]))
 async def handle_search(c, m):
     if m.text.startswith("/"): return 
     await send_results(m, m.text.lower().strip())
-
-# --- CALLBACKS ---
-@app.on_callback_query()
-async def cb_handler(c, cb: CallbackQuery):
-    data = cb.data.split("_")
-    if data[0] == "pg": await send_results(cb, data[1], int(data[2]), is_cb=True)
-    elif data[0] == "filt":
-        q, p = data[2], data[3]
-        if data[1] == "lang":
-            btns = [[InlineKeyboardButton(l, callback_data=f"apply_lang_{l}_{q}")] for l in ["Hindi", "English", "Bengali", "Tamil"]]
-            btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_{p}")])
-            await cb.message.edit("🌍 Select Language:", reply_markup=InlineKeyboardMarkup(btns))
-        else:
-            btns = [[InlineKeyboardButton(f"S{i}", callback_data=f"apply_sess_{i}_{q}"), InlineKeyboardButton(f"S{i+1}", callback_data=f"apply_sess_{i+1}_{q}")] for i in range(1, 11, 2)]
-            btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_{p}")])
-            await cb.message.edit("📂 Select Session:", reply_markup=InlineKeyboardMarkup(btns))
-    elif data[0] == "apply":
-        f_t, val, q = data[1], data[2], data[3]
-        cursor = db.files.find({"clean_name": {"$regex": q}, "file_name": {"$regex": val, "$options": "i"}})
-        res = await cursor.to_list(length=15)
-        if not res: return await cb.message.edit("❌ No results!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")]]))
-        btns = [[InlineKeyboardButton(format_btn(f['file_name']), url=f"https://t.me/{(await c.get_me()).username}?start=file_{f['_id']}")] for f in res]
-        btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")])
-        await cb.message.edit(f"✅ Results for {val}:", reply_markup=InlineKeyboardMarkup(btns))
 
 # --- BOOTSTRAP ---
 async def main():
     Thread(target=run_flask, daemon=True).start()
     await app.start()
-    print("🚀 Master Bot is LIVE!")
+    logger.info("🚀 Bot is LIVE!")
     await idle()
 
 if __name__ == "__main__":
