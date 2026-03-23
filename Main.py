@@ -17,6 +17,16 @@ CHANNEL_ID = -1003065768519
 
 ia = Cinemagoer()
 
+# --- WEB SERVER (Render Port Fix) ---
+web_app = Flask(__name__)
+@web_app.route('/')
+def home(): return "CINESOCIETY ULTRA V4 IS ALIVE! 🚀"
+
+def run_flask():
+    # Render-এর পোর্ট এরর ফিক্স করার জন্য এটি অত্যন্ত জরুরি
+    port = int(os.environ.get('PORT', 8080))
+    web_app.run(host='0.0.0.0', port=port)
+
 # --- DATABASE ---
 class Database:
     def __init__(self, url):
@@ -60,11 +70,11 @@ def format_btn(filename):
     return f"🎬 {res} / {se} {clean[:25]}".strip()
 
 async def auto_delete(c, chat_id, msg_id):
-    await asyncio.sleep(180) # ৩ মিনিট
+    await asyncio.sleep(120) # ২ মিনিট
     try: await c.delete_messages(chat_id, msg_id)
     except: pass
 
-# --- SEARCH & PAGINATION ---
+# --- SEARCH & PAGINATION LOGIC ---
 async def send_results(m, query, page=0, is_cb=False):
     words = query.split()
     regex = f"^{''.join([f'(?=.*{re.escape(w)})' for w in words])}.*$"
@@ -100,63 +110,58 @@ async def send_results(m, query, page=0, is_cb=False):
         await m.message.edit(text, reply_markup=InlineKeyboardMarkup(btns))
     else:
         sent = await m.reply_text(text, reply_markup=InlineKeyboardMarkup(btns))
-        asyncio.create_task(auto_delete(app, m.chat.id, sent.id))
+        if m.chat.type in ["group", "supergroup"]:
+            asyncio.create_task(auto_delete(app, m.chat.id, sent.id))
 
 # --- HANDLERS ---
-@app.on_message(filters.text & ~filters.command(["start", "index", "stats", "commands", "pm_search_off", "pm_search_on"]))
-async def handle_search(c, m):
+@app.on_message(filters.command("start"))
+async def start_cmd(c, m):
     user = await db.get_user(m.from_user.id)
-    pm_off = await db.get_setting("pm_search_off", False)
-    if m.chat.type == "private" and pm_off and not user["is_premium"]:
-        return await m.reply("⚠️ PLZ REQUEST ON GROUP")
-    
+    if len(m.command) > 1 and m.command[1].startswith("file_"):
+        doc_id = m.command[1].split("_")[1]
+        doc = await db.files.find_one({"_id": ObjectId(doc_id)})
+        if doc:
+            f_msg = await c.send_cached_media(m.chat.id, doc['file_id'], caption=doc['caption'])
+            w_msg = await m.reply("⚠️ Deleted in 2 mins!")
+            asyncio.create_task(auto_delete(c, m.chat.id, [f_msg.id, w_msg.id]))
+        return
+    await m.reply_text(f"👋 Hello {m.from_user.mention}! Search movies here.")
+
+@app.on_message(filters.text & ~filters.command(["start", "index", "stats", "commands"]))
+async def handle_search(c, m):
     await send_results(m, m.text.lower().strip())
 
 @app.on_callback_query()
 async def cb_handler(c, cb: CallbackQuery):
     data = cb.data.split("_")
-    
-    if data[0] == "pg": # Page Change
-        await send_results(cb, data[1], int(data[2]), is_cb=True)
-
-    elif data[0] == "filt": # Filter Menu
+    if data[0] == "pg": await send_results(cb, data[1], int(data[2]), is_cb=True)
+    elif data[0] == "filt":
         f_type, query, page = data[1], data[2], data[3]
         if f_type == "lang":
-            langs = ["Hindi", "English", "Bengali", "Tamil", "Telugu"]
-            btn_list = [[InlineKeyboardButton(l, callback_data=f"apply_lang_{l}_{query}")] for l in langs]
-            btn_list.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{query}_{page}")])
-            await cb.message.edit(f"🌍 **Select Language for {query.title()}:**", reply_markup=InlineKeyboardMarkup(btn_list))
+            btns = [[InlineKeyboardButton(l, callback_data=f"apply_lang_{l}_{query}")] for l in ["Hindi", "English", "Bengali", "Tamil"]]
+            btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{query}_{page}")])
+            await cb.message.edit("🌍 Select Language:", reply_markup=InlineKeyboardMarkup(btns))
         elif f_type == "sess":
-            btn_list = []
-            for i in range(1, 11, 2):
-                btn_list.append([InlineKeyboardButton(f"S{i}", callback_data=f"apply_sess_{i}_{query}"),
-                                 InlineKeyboardButton(f"S{i+1}", callback_data=f"apply_sess_{i+1}_{query}")])
-            btn_list.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{query}_{page}")])
-            await cb.message.edit(f"📂 **Select Session for {query.title()}:**", reply_markup=InlineKeyboardMarkup(btn_list))
-
-    elif data[0] == "apply": # Apply Filter Logic
-        f_type, val, query = data[1], data[2], data[3]
-        if f_type == "lang":
-            cursor = db.files.find({"clean_name": {"$regex": query}, "file_name": {"$regex": val, "$options": "i"}})
-        else:
-            pattern = f"S{int(val):02d}|Season {val}"
-            cursor = db.files.find({"clean_name": {"$regex": query}, "file_name": {"$regex": pattern, "$options": "i"}})
-        
-        filtered = await cursor.to_list(length=15)
-        if not filtered:
-            btn = [[InlineKeyboardButton("🔙 Back", callback_data=f"pg_{query}_0")]]
-            return await cb.message.edit("❌ **This is the language file here.**", reply_markup=InlineKeyboardMarkup(btn))
-
-        btns = [[InlineKeyboardButton(format_btn(f['file_name']), url=f"https://t.me/{(await c.get_me()).username}?start=file_{f['_id']}")] for f in filtered]
-        btns.append([InlineKeyboardButton("🔙 Back to Results", callback_data=f"pg_{query}_0")])
-        await cb.message.edit(f"✅ **Results for {val}:**", reply_markup=InlineKeyboardMarkup(btns))
-
-# (বাকি সব অ্যাডমিন কমান্ড/স্টার্ট লজিক আগের কোডের মতই থাকবে...)
-@app.on_message(filters.command("start"))
-async def start_cmd(c, m):
-    # (আগের ভেরিফিকেশন ও স্টার্ট মেসেজ লজিক)
-    await m.reply_text("👋 Hello! Search movies here.")
+            btns = [[InlineKeyboardButton(f"S{i}", callback_data=f"apply_sess_{i}_{query}"), 
+                     InlineKeyboardButton(f"S{i+1}", callback_data=f"apply_sess_{i+1}_{query}")] for i in range(1, 11, 2)]
+            btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{query}_{page}")])
+            await cb.message.edit("📂 Select Session:", reply_markup=InlineKeyboardMarkup(btns))
+    elif data[0] == "apply":
+        f_t, val, q = data[1], data[2], data[3]
+        p = f"S{int(val):02d}|Season {val}" if f_t == "sess" else val
+        cursor = db.files.find({"clean_name": {"$regex": q}, "file_name": {"$regex": p, "$options": "i"}})
+        res = await cursor.to_list(length=15)
+        if not res: return await cb.message.edit("❌ **This is the language file here.**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")]]))
+        btns = [[InlineKeyboardButton(format_btn(f['file_name']), url=f"https://t.me/{(await c.get_me()).username}?start=file_{f['_id']}")] for f in res]
+        btns.append([InlineKeyboardButton("🔙 Back to Results", callback_data=f"pg_{q}_0")])
+        await cb.message.edit(f"✅ Filtered Results ({val}):", reply_markup=InlineKeyboardMarkup(btns))
 
 # --- BOOTSTRAP ---
+async def start_bot():
+    Thread(target=run_flask, daemon=True).start()
+    await app.start()
+    print("🚀 Master Bot is LIVE! Edit by INDRA")
+    await idle()
+
 if __name__ == "__main__":
-    app.run()
+    asyncio.get_event_loop().run_until_complete(start_bot())
