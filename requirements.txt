@@ -4,5 +4,4 @@ motor
 flask
 pyspellchecker
 cinemagoer
-requests
 dnspython
