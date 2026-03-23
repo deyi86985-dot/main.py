@@ -17,10 +17,10 @@ CHANNEL_ID = -1003065768519
 
 ia = Cinemagoer()
 
-# --- WEB SERVER ---
+# --- WEB SERVER (Render Port Fix) ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "CINESOCIETY MASTER IS ALIVE! 🚀"
+def home(): return "CINESOCIETY MASTER IS LIVE! 🚀"
 
 def run_flask():
     port = int(os.environ.get('PORT', 8080))
@@ -32,8 +32,6 @@ class Database:
         self.client = AsyncIOMotorClient(url)
         self.db = self.client["CINESOCIETY_ULTRA_V5"]
         self.files = self.db["files"]
-        self.users = self.db["users"]
-        self.settings = self.db["settings"]
         self.admins = self.db["admins"]
 
     async def save_file(self, f_id, f_name, f_size, caption):
@@ -62,7 +60,7 @@ async def auto_delete(c, chat_id, msg_id):
     try: await c.delete_messages(chat_id, msg_id)
     except: pass
 
-# --- SEARCH & PAGINATION ---
+# --- SEARCH ENGINE ---
 async def send_results(m, query, page=0, is_cb=False):
     words = query.split()
     regex = f".*{'.*'.join([re.escape(w) for w in words])}.*"
@@ -73,7 +71,6 @@ async def send_results(m, query, page=0, is_cb=False):
         txt = "❌ No results found!\n\n**Edit by INDRA**"
         if is_cb: return await m.answer("No more results!", show_alert=True)
         msg = await m.reply_text(txt)
-        asyncio.create_task(auto_delete(app, m.chat.id, msg.id))
         return
 
     start, end = page * 10, (page + 1) * 10
@@ -105,23 +102,20 @@ async def start_cmd(c, m):
         doc = await db.files.find_one({"_id": ObjectId(m.command[1].split("_")[1])})
         if doc:
             f_msg = await c.send_cached_media(m.chat.id, doc['file_id'], caption=doc['caption'])
-            w_msg = await m.reply("⚠️ Deleted in 2 mins!")
-            asyncio.create_task(auto_delete(c, m.chat.id, [f_msg.id, w_msg.id]))
+            asyncio.create_task(auto_delete(c, m.chat.id, f_msg.id))
         return
-    await m.reply_text(f"👋 Hello {m.from_user.mention}! মুভির নাম লিখে সার্চ করুন।\n\n**Edit by INDRA**")
+    await m.reply_text(f"👋 Hello {m.from_user.mention}! Search movies here.\n\n**Edit by INDRA**")
 
 @app.on_message(filters.command("stats"))
 async def stats_cmd(c, m):
     count = await db.files.count_documents({})
     await m.reply(f"📊 **Total Indexed Files:** `{count}`\n\n**Edit by INDRA**")
 
-@app.on_message(filters.command("index"))
+@app.on_message(filters.command("index") & filters.user(OWNER_ID))
 async def index_cmd(c, m):
-    if m.from_user.id != OWNER_ID: return
-    target = CHANNEL_ID if len(m.command) < 2 else m.command[1]
     msg = await m.reply("🔄 **Indexing...**")
     count, checked = 0, 0
-    async for user_msg in c.get_chat_history(target):
+    async for user_msg in c.get_chat_history(CHANNEL_ID):
         checked += 1
         file = user_msg.document or user_msg.video
         if file:
@@ -129,14 +123,13 @@ async def index_cmd(c, m):
         if checked % 100 == 0: await msg.edit(f"🔄 Checked: `{checked}` | Saved: `{count}`")
     await msg.edit(f"✅ Indexed `{count}` files!")
 
-# --- SEARCH HANDLER (CRITICAL FIX) ---
-@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "commands", "pm_on", "pm_off"]))
+# --- SEARCH HANDLER ---
+@app.on_message(filters.text & ~filters.command(["start", "stats", "index", "commands"]))
 async def handle_search(c, m):
-    # কমান্ডগুলো যাতে সার্চ হিসেবে না যায় সেজন্য filters.command এর উল্টো ব্যবহার করা হয়েছে।
     if m.text.startswith("/"): return 
     await send_results(m, m.text.lower().strip())
 
-# --- CALLBACK HANDLERS ---
+# --- CALLBACKS ---
 @app.on_callback_query()
 async def cb_handler(c, cb: CallbackQuery):
     data = cb.data.split("_")
@@ -153,20 +146,19 @@ async def cb_handler(c, cb: CallbackQuery):
             await cb.message.edit("📂 Select Session:", reply_markup=InlineKeyboardMarkup(btns))
     elif data[0] == "apply":
         f_t, val, q = data[1], data[2], data[3]
-        pattern = f"S{int(val):02d}|Season {val}" if f_t == "sess" else val
-        cursor = db.files.find({"clean_name": {"$regex": q}, "file_name": {"$regex": pattern, "$options": "i"}})
+        cursor = db.files.find({"clean_name": {"$regex": q}, "file_name": {"$regex": val, "$options": "i"}})
         res = await cursor.to_list(length=15)
-        if not res: return await cb.message.edit("❌ **This is the language file here.**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")]]))
+        if not res: return await cb.message.edit("❌ No results!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")]]))
         btns = [[InlineKeyboardButton(format_btn(f['file_name']), url=f"https://t.me/{(await c.get_me()).username}?start=file_{f['_id']}")] for f in res]
         btns.append([InlineKeyboardButton("🔙 Back", callback_data=f"pg_{q}_0")])
         await cb.message.edit(f"✅ Results for {val}:", reply_markup=InlineKeyboardMarkup(btns))
 
 # --- BOOTSTRAP ---
-async def start_bot():
+async def main():
     Thread(target=run_flask, daemon=True).start()
     await app.start()
-    logger.info("🚀 Master Bot is LIVE!")
+    print("🚀 Master Bot is LIVE!")
     await idle()
 
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(start_bot())
+    asyncio.get_event_loop().run_until_complete(main())
